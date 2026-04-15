@@ -1,0 +1,6 @@
+build/
+bin/
+trattoria_server
+trattoria_client
+.DS_Store
+*.o
