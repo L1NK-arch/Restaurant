@@ -337,9 +337,7 @@ int is_food_ready_for_table(const SharedKitchen *kitchen, int table_idx)
 }
 
 
-/* =========================================================================
- * TASK 2 – PROFILAZIONE DEL PERSONALE (Staff Profiling)
- * ========================================================================= */
+/* TASK 2 – PROFILAZIONE DEL PERSONALE (Staff Profiling) */
 
 /*
  * best_staff_for_role()
