@@ -43,25 +43,30 @@ int count_tables_by_state(const shm_diningroom_t *room, table_state_t target) {
     return count;
 }
 
-int count_dirty_tables(const shm_diningroom_t *room) {      // tables that need cleaning
+int count_dirty_tables(const shm_diningroom_t *room) {
     return count_tables_by_state(room, TABLE_FREED);
 }
-int count_ordering_tables(const shm_diningroom_t *room) {   // families just seated
+
+int count_ordering_tables(const shm_diningroom_t *room) {
     return count_tables_by_state(room, TABLE_TAKEN);
 }
-int count_serving_tables(const shm_diningroom_t *room) {    // food ready to be delivered
+
+int count_serving_tables(const shm_diningroom_t *room) {
     return count_tables_by_state(room, TABLE_SERVED);
 }
 
 int get_pending_orders(const shm_kitchen_t *kitchen) {
     return kitchen->pending_orders;
 }
+
 level_t get_dirty_plates_level(const shm_kitchen_t *kitchen) {
     return kitchen->dirty_plates;
 }
+
 level_t get_clean_plates_level(const shm_kitchen_t *kitchen) {
     return kitchen->clean_plates;
 }
+
 int is_food_ready_for_table(const shm_kitchen_t *kitchen, int table_idx) {
     if (table_idx < 0 || table_idx >= MAX_TABLES) return 0;
     return kitchen->food_ready[table_idx] == TR_TRUE;
@@ -78,7 +83,7 @@ int best_staff_for_role(const staff_member_t *staff, int n_staff, role_t role) {
         case ROLE_COOK:       skill_idx = SKILL_COOK;    break;
         case ROLE_HELPER:     skill_idx = SKILL_HELPER;  break;
         case ROLE_CASHIER:    skill_idx = SKILL_CASHIER; break;
-        case ROLE_DISHWASHER: skill_idx = SKILL_HELPER;  break; // use helper skill as proxy
+        case ROLE_DISHWASHER: skill_idx = SKILL_HELPER;  break;
         default: return -1;
     }
     for (int i = 0; i < n_staff; i++) {
