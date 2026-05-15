@@ -10,6 +10,15 @@
 #include <errno.h>
 #include "ipc.h"
 
+// ========== GLOBAL DATA ==========
+
+shm_diningroom_t *g_dining = NULL;
+shm_kitchen_t    *g_kitchen = NULL;
+shm_cashdesk_t   *g_cash   = NULL;
+shm_blackboard_t *g_board  = NULL;
+int g_qid_fatigue;
+int g_current_strategy = STRATEGY_NONE;
+
 // ========== SEMAPHORE HELPERS ==========
 
 void lock_blackboard(int sem_id) {
@@ -149,20 +158,38 @@ int is_too_tired(int staff_id, role_t role) {
     return get_fatigue(staff_id, role) == LVL_HIGH;
 }
 
+// ========== THREAD DATA ==========
+
+typedef struct {
+    int my_id;
+} thread_data_t;
+
 // ========== THREAD LOGIC ==========
 
 int global_sem_id;
 volatile int instance_active = 0;
 
 void* staff_worker(void* arg) {
-    int my_id = *((int*)arg);
+    thread_data_t *data = (thread_data_t*) arg;
+    int my_id = data->my_id;
+
     printf("[Thread] Staff member %d has clocked in!\n", my_id);
     while (instance_active) {
         lock_blackboard(global_sem_id);
-        printf("[Staff %d] I have the talking stick! Checking the blackboard...\n", my_id);
-        usleep(50000);
+
+        // 1. Update fatigue info for this staff member
+        poll_fatigue_messages(g_qid_fatigue, my_id);
+
+        // 2. If dishwasher is free, claim it
+        if (g_board->dishwasher == -1) {
+            g_board->dishwasher = my_id;
+            printf("[Staff %d] I am now the dishwasher.\n", my_id);
+        }
+
         unlock_blackboard(global_sem_id);
-        usleep(200000);
+
+        // Wait a bit before trying again
+        usleep(100000);
     }
     printf("[Thread] Staff member %d is clocking out.\n", my_id);
     return NULL;
@@ -180,24 +207,29 @@ int main(int argc, char **argv) {
     if (qid_s2c == -1) { perror("s2c queue failed"); exit(1); }
     int qid_fatigue = msgget(ftok(TRATTORIA_FTOK_PATH, PROJ_MSG_FATIGUE), 0666);
     if (qid_fatigue == -1) { perror("fatigue queue failed"); exit(1); }
+    g_qid_fatigue = qid_fatigue;
     printf("message queues connected!\n");
 
     // shared memories
     int shm_dining_id = shmget(ftok(TRATTORIA_FTOK_PATH, PROJ_DININGROOM), sizeof(shm_diningroom_t), 0666);
     if (shm_dining_id == -1) { perror("dining room shmget failed"); exit(1); }
     shm_diningroom_t *dining_room = (shm_diningroom_t *) shmat(shm_dining_id, NULL, 0);
+    g_dining = dining_room;
 
     int shm_kitchen_id = shmget(ftok(TRATTORIA_FTOK_PATH, PROJ_KITCHEN), sizeof(shm_kitchen_t), 0666);
     if (shm_kitchen_id == -1) { perror("kitchen shmget failed"); exit(1); }
     shm_kitchen_t *kitchen = (shm_kitchen_t *) shmat(shm_kitchen_id, NULL, 0);
+    g_kitchen = kitchen;
 
     int shm_cash_id = shmget(ftok(TRATTORIA_FTOK_PATH, PROJ_CASHDESK), sizeof(shm_cashdesk_t), 0666);
     if (shm_cash_id == -1) { perror("cash desk shmget failed"); exit(1); }
     shm_cashdesk_t *cash_desk = (shm_cashdesk_t *) shmat(shm_cash_id, NULL, 0);
+    g_cash = cash_desk;
 
     int shm_blackboard_id = shmget(ftok(TRATTORIA_FTOK_PATH, PROJ_BLACKBOARD), sizeof(shm_blackboard_t), 0666);
     if (shm_blackboard_id == -1) { perror("blackboard shmget failed"); exit(1); }
     shm_blackboard_t *blackboard = (shm_blackboard_t *) shmat(shm_blackboard_id, NULL, 0);
+    g_board = blackboard;
     printf("shared memory attached!\n");
 
     // semaphores
@@ -235,7 +267,7 @@ int main(int argc, char **argv) {
     } s2c_msg;
     size_t max_msg_size = sizeof(s2c_msg) - sizeof(long);
     pthread_t staff_threads[MAX_STAFF];
-    int staff_ids[MAX_STAFF];
+    thread_data_t thread_data[MAX_STAFF];
 
     while (1) {
         if (msgrcv(qid_s2c, &s2c_msg, max_msg_size, 0, 0) == -1) {
@@ -245,9 +277,13 @@ int main(int argc, char **argv) {
         if (s2c_msg.mtype == MSGTYPE_INSTANCE) {
             printf("\n[--- NEW ROUND STARTING ---]\n");
             instance_active = 1;
+
+            // Save the strategy for this instance
+            g_current_strategy = s2c_msg.instance.strategy;
+
             for (int i = 0; i < welcome_msg.staff_n; i++) {
-                staff_ids[i] = i;
-                pthread_create(&staff_threads[i], NULL, staff_worker, &staff_ids[i]);
+                thread_data[i].my_id = i;
+                pthread_create(&staff_threads[i], NULL, staff_worker, &thread_data[i]);
             }
         } else if (s2c_msg.mtype == MSGTYPE_INSTANCE_DONE) {
             printf("\n[--- ROUND FINISHED ---]\n");
