@@ -370,9 +370,15 @@ int main(int argc, char **argv) {
     }
 
     msg_welcome_t welcome_msg;
-    if (msgrcv(qid_s2c, &welcome_msg, sizeof(msg_welcome_t) - sizeof(long), MSGTYPE_WELCOME, 0) == -1) {
+    if (msgrcv(qid_s2c, &welcome_msg, sizeof(msg_welcome_t) - sizeof(long), 0, 0) == -1) {
         perror("welcome failed"); exit(1);
     }
+
+    if (welcome_msg.mtype != MSGTYPE_WELCOME) {
+        fprint(stderr, "server didn't respond with WELCOME: check student IDs\n", welcome_msg.mtype);
+        exit(1);
+    }
+
     g_welcome_staff_n = welcome_msg.staff_n;
     memcpy(g_welcome_staff, welcome_msg.staff, sizeof(staff_member_t) * welcome_msg.staff_n);
     printf("Received WELCOME! Staff: %d | Tables: %d\n", welcome_msg.staff_n, welcome_msg.tables_n);
@@ -417,10 +423,9 @@ int main(int argc, char **argv) {
             }
             printf("Avg Time: %.2f | Avg Review: %s\n", s2c_msg.done.total_families_time, s2c_msg.done.average_families_score_review);
         }
-        else if (s2c_msg.mtype == MSGTYPE_END) {
-            printf("\n[--- SERVER SHUTTING DOWN ---]\n");
-            instance_active = 0;
-            break;
+        else if (s2c_msg.mtype == MSGTYPE_ERROR) {
+            fprint(stderr, ".../n);
+                exit(1);
         }
     }
 
