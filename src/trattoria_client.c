@@ -8,6 +8,7 @@
 #include <sys/sem.h>
 #include <pthread.h>
 #include <errno.h>
+#include <stdatomic.h>
 #include "ipc.h"
 
 // ========== GLOBAL DATA ==========
@@ -23,7 +24,7 @@ staff_member_t g_welcome_staff[MAX_STAFF];
 int            g_welcome_staff_n = 0;
 
 int global_sem_id;
-volatile int instance_active = 0;
+atomic_int instance_active = 0;
 
 // Pause between thread cycles, in REAL microseconds.
 // Recalculated for each instance based on speed (see main)
@@ -349,6 +350,11 @@ int main(int argc, char **argv) {
     g_kitchen = (shm_kitchen_t *) shmat(shm_kitchen_id, NULL, 0);
     g_cash = (shm_cashdesk_t *) shmat(shm_cash_id, NULL, 0);
     g_board = (shm_blackboard_t *) shmat(shm_blackboard_id, NULL, 0);
+
+    if (g_dining == (void *)-1 || g_kitchen == (void *)-1 || g_cash == (void *)-1 || g_board == (void *)-1) {
+        perror("shmat failed);
+            exit(1);
+    }
 
     global_sem_id = semget(ftok(TRATTORIA_FTOK_PATH, PROJ_SEM), SEM_NSEMS, 0666);
     if (global_sem_id == -1) { perror("Semaphores failed"); exit(1); }
