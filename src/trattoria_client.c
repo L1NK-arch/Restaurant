@@ -365,9 +365,10 @@ int main(int argc, char **argv) {
     memset(&hello_msg, 0, sizeof(hello_msg));
     hello_msg.mtype = MSGTYPE_HELLO;
     hello_msg.pid = getpid();
-    hello_msg.studentid_n = 2;
-    strncpy(hello_msg.studentids[0], "VR123456", STUDENTID_MAXLEN);
-    strncpy(hello_msg.studentids[1], "VR654321", STUDENTID_MAXLEN);
+    hello_msg.studentid_n = 3;
+    strncpy(hello_msg.studentids[0], "VRxxxxxx", STUDENTID_MAXLEN); // matricola di maxim
+    strncpy(hello_msg.studentids[1], "VR519918", STUDENTID_MAXLEN); // matricola di khady
+    strncpy(hello_msg.studentids[1], "VRxxxxxx", STUDENTID_MAXLEN); // matricola di loïc
     hello_msg.has_strategy = TR_TRUE;
     hello_msg.strategy = requested_strategy;
 
