@@ -25,11 +25,13 @@ int            g_welcome_staff_n = 0;
 int global_sem_id;
 volatile int instance_active = 0;
 
-// Cleaner timeout: if we've been "cleaning" for this many cycles without the
-// table leaving TABLE_FREED, assume the server finished cleaning (it may not
-// transition state until a new family takes the table) and release the role.
-// 100 cycles * 20ms = 2 seconds — plenty, since cleaning in the log is instant.
-#define CLEANER_TIMEOUT_CYCLES 100
+// Pause between thread cycles, in REAL microseconds.
+// Recalculated for each instance based on speed (see main)
+int g_poll_us = 2000;
+
+// After how many cycles the cleaner stops waiting and leaves the table.
+// Also depends on speed.
+int g_cleaner_cycles = 100;
 
 // Tables we've given up on (server cleaned but didn't transition state).
 // Protected by SEMIDX_BLACKBOARD. Cleared when state != TABLE_FREED so the
@@ -277,7 +279,7 @@ void* staff_worker(void* arg) {
                 release_role(data);
                 data->role_cycles = 0;
                 unlock_blackboard(global_sem_id);
-                usleep(500000);
+                usleep(g_poll_us * 25);
                 continue;
             }
         }
@@ -285,7 +287,7 @@ void* staff_worker(void* arg) {
         if (data->current_role != ROLE_NONE) {
             data->role_cycles++;
 
-            if (data->current_role == ROLE_HELPER && data->role_cycles > CLEANER_TIMEOUT_CYCLES) {
+            if (data->current_role == ROLE_HELPER && data->role_cycles > g_cleaner_cycles) {
                 // Server finished cleaning but didn't transition state
                 // (it waits for a new family to take the table).
                 // Mark and release so we can serve pending deliveries.
@@ -306,7 +308,7 @@ void* staff_worker(void* arg) {
         }
 
         unlock_blackboard(global_sem_id);
-        usleep(20000);
+        usleep(g_poll_us);
     }
     return NULL;
 }
@@ -395,6 +397,12 @@ int main(int argc, char **argv) {
             g_timeout_cleaned_mask = 0;
             instance_active = 1;
             g_current_strategy = s2c_msg.instance.strategy;
+
+            int speed = s2c_msg.instance.speed;
+            if (speed < 1) speed = 1;
+            g_poll_us = 2000 / speed;
+            if (g_poll_us < 200) g_poll_us = 200;
+            if (g_cleaner_cycles < 5) g_cleaner_cycles = 5;
 
             for (int i = 0; i < welcome_msg.staff_n; i++) {
                 thread_data[i].my_id = i;
